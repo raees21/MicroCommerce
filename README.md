@@ -329,6 +329,115 @@ This starts:
 - Redis: `localhost:6379`
 - Kafka external listener: `localhost:29092`
 
+## Rider-friendly local development
+
+If you are building one microservice at a time in Rider, the best workflow is:
+
+1. Run only infrastructure in Docker
+2. Run the microservice you are editing from Rider
+3. Keep the other services either stopped or running in Docker as needed
+
+### Start only infrastructure
+
+Use the infra-only compose file:
+
+```bash
+docker compose -f docker-compose.infra.yml up -d
+```
+
+This starts only:
+
+- Postgres
+- MongoDB
+- Redis
+- Zookeeper
+- Kafka
+
+### Stop only infrastructure
+
+```bash
+docker compose -f docker-compose.infra.yml down
+```
+
+### Recommended Rider workflow
+
+- Start infra with `docker-compose.infra.yml`
+- Open `MicroCommerce.slnx` in Rider
+- Create a `.NET Project` run configuration for the service you want to edit
+- Run that service from Rider with breakpoints/debugging
+- Run other services only when you need them
+
+Example:
+
+- keep Kafka, Postgres, MongoDB, and Redis running in Docker
+- run `Ordering` from Rider while editing order flow code
+- run `Products` from Docker, or start it from Rider too if you are changing both sides of the gRPC call
+
+### Useful service entrypoints in Rider
+
+- `src/Services/Identity/MicroCommerce.Identity.Api`
+- `src/Services/Users/MicroCommerce.Users.Api`
+- `src/Services/Products/MicroCommerce.Products.Api`
+- `src/Services/Cart/MicroCommerce.Cart.Api`
+- `src/Services/Ordering/MicroCommerce.Ordering.Api`
+- `src/Services/Payments/MicroCommerce.Payments.Api`
+- `src/Services/Shipping/MicroCommerce.Shipping.Api`
+- `src/Gateway/MicroCommerce.ApiGateway`
+
+### Notes for hybrid local development
+
+- The infra-only compose file is the best starting point for Rider work
+- Kafka is exposed on `localhost:29092`
+- Postgres is exposed on `localhost:5432`
+- MongoDB is exposed on `localhost:27017`
+- Redis is exposed on `localhost:6379`
+- The full `docker-compose.yml` is still the easiest way to run the entire system end to end
+
+### Developer workflow when switching microservices
+
+When you are editing one microservice in Rider and then want Docker to pick up your changes before you move on to another service, use this loop:
+
+1. Start infrastructure:
+
+```bash
+docker compose -f docker-compose.infra.yml up -d
+```
+
+2. Run the microservice you are actively editing from Rider
+3. Make and test your changes locally
+4. Stop that microservice in Rider when you are done
+5. Rebuild and restart just that service in Docker:
+
+```bash
+docker compose up --build -d <service-name>
+```
+
+Examples:
+
+```bash
+docker compose up --build -d ordering-api
+docker compose up --build -d products-api
+docker compose up --build -d identity-api
+```
+
+If you changed more than one service, you can rebuild a few together:
+
+```bash
+docker compose up --build -d ordering-api products-api payments-api
+```
+
+If you want Docker to refresh the whole application again:
+
+```bash
+docker compose up --build -d
+```
+
+Important:
+
+- do not run the same microservice in Rider and Docker at the same time on the same port
+- while editing a service, prefer Rider
+- when done, stop it in Rider and bring it back into Docker with `docker compose up --build -d <service-name>`
+
 ## Suggested demo flow
 
 Once the stack is up:
