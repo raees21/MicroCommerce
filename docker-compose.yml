@@ -1,0 +1,214 @@
+services:
+  gateway:
+    build:
+      context: .
+      dockerfile: docker/dotnet-service.Dockerfile
+      args:
+        PROJECT_PATH: src/Gateway/MicroCommerce.ApiGateway/MicroCommerce.ApiGateway.csproj
+    container_name: gateway
+    depends_on:
+      - identity-api
+      - users-api
+      - products-api
+      - cart-api
+      - ordering-api
+      - payments-api
+      - shipping-api
+    ports:
+      - "5080:8080"
+
+  identity-api:
+    build:
+      context: .
+      dockerfile: docker/dotnet-service.Dockerfile
+      args:
+        PROJECT_PATH: src/Services/Identity/MicroCommerce.Identity.Api/MicroCommerce.Identity.Api.csproj
+    container_name: identity-api
+    depends_on:
+      - postgres
+      - kafka
+    environment:
+      Storage__PostgresConnectionString: Host=postgres;Port=5432;Database=identitydb;Username=postgres;Password=postgres
+      Kafka__BootstrapServers: kafka:9092
+      Kafka__ClientId: identity-api
+      Kafka__ConsumerGroup: identity-api-group
+    ports:
+      - "6001:8080"
+
+  users-api:
+    build:
+      context: .
+      dockerfile: docker/dotnet-service.Dockerfile
+      args:
+        PROJECT_PATH: src/Services/Users/MicroCommerce.Users.Api/MicroCommerce.Users.Api.csproj
+    container_name: users-api
+    depends_on:
+      - postgres
+      - kafka
+    environment:
+      Storage__PostgresConnectionString: Host=postgres;Port=5432;Database=usersdb;Username=postgres;Password=postgres
+      Kafka__BootstrapServers: kafka:9092
+      Kafka__ClientId: users-api
+      Kafka__ConsumerGroup: users-api-group
+    ports:
+      - "6002:8080"
+
+  products-api:
+    build:
+      context: .
+      dockerfile: docker/dotnet-service.Dockerfile
+      args:
+        PROJECT_PATH: src/Services/Products/MicroCommerce.Products.Api/MicroCommerce.Products.Api.csproj
+    container_name: products-api
+    depends_on:
+      - postgres
+    environment:
+      Storage__PostgresConnectionString: Host=postgres;Port=5432;Database=productsdb;Username=postgres;Password=postgres
+    ports:
+      - "6003:8080"
+      - "6103:8081"
+
+  cart-api:
+    build:
+      context: .
+      dockerfile: docker/dotnet-service.Dockerfile
+      args:
+        PROJECT_PATH: src/Services/Cart/MicroCommerce.Cart.Api/MicroCommerce.Cart.Api.csproj
+    container_name: cart-api
+    depends_on:
+      - redis
+      - mongodb
+    environment:
+      Storage__MongoConnectionString: mongodb://mongodb:27017
+      Storage__MongoDatabaseName: microcommerce
+      Storage__RedisConnectionString: redis:6379
+    ports:
+      - "6004:8080"
+
+  ordering-api:
+    build:
+      context: .
+      dockerfile: docker/dotnet-service.Dockerfile
+      args:
+        PROJECT_PATH: src/Services/Ordering/MicroCommerce.Ordering.Api/MicroCommerce.Ordering.Api.csproj
+    container_name: ordering-api
+    depends_on:
+      - postgres
+      - mongodb
+      - kafka
+      - products-api
+    environment:
+      Storage__PostgresConnectionString: Host=postgres;Port=5432;Database=orderingdb;Username=postgres;Password=postgres
+      Storage__MongoConnectionString: mongodb://mongodb:27017
+      Storage__MongoDatabaseName: microcommerce
+      Kafka__BootstrapServers: kafka:9092
+      Kafka__ClientId: ordering-api
+      Kafka__ConsumerGroup: ordering-api-group
+      ServiceEndpoints__ProductsGrpcUrl: http://products-api:8081
+    ports:
+      - "6005:8080"
+      - "6105:8081"
+
+  payments-api:
+    build:
+      context: .
+      dockerfile: docker/dotnet-service.Dockerfile
+      args:
+        PROJECT_PATH: src/Services/Payments/MicroCommerce.Payments.Api/MicroCommerce.Payments.Api.csproj
+    container_name: payments-api
+    depends_on:
+      - postgres
+      - kafka
+    environment:
+      Storage__PostgresConnectionString: Host=postgres;Port=5432;Database=paymentsdb;Username=postgres;Password=postgres
+      Kafka__BootstrapServers: kafka:9092
+      Kafka__ClientId: payments-api
+      Kafka__ConsumerGroup: payments-api-group
+    ports:
+      - "6006:8080"
+
+  shipping-api:
+    build:
+      context: .
+      dockerfile: docker/dotnet-service.Dockerfile
+      args:
+        PROJECT_PATH: src/Services/Shipping/MicroCommerce.Shipping.Api/MicroCommerce.Shipping.Api.csproj
+    container_name: shipping-api
+    depends_on:
+      - postgres
+      - kafka
+    environment:
+      Storage__PostgresConnectionString: Host=postgres;Port=5432;Database=shippingdb;Username=postgres;Password=postgres
+      Kafka__BootstrapServers: kafka:9092
+      Kafka__ClientId: shipping-api
+      Kafka__ConsumerGroup: shipping-api-group
+    ports:
+      - "6007:8080"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+    container_name: frontend
+    depends_on:
+      - gateway
+    ports:
+      - "3080:80"
+
+  postgres:
+    image: postgres:17
+    container_name: postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: masterdb
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+
+  mongodb:
+    image: mongo:8
+    container_name: mongodb
+    volumes:
+      - mongo-data:/data/db
+    ports:
+      - "27017:27017"
+
+  redis:
+    image: redis:7
+    container_name: redis
+    ports:
+      - "6379:6379"
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.7.1
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+
+  kafka:
+    image: confluentinc/cp-kafka:7.7.1
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+    ports:
+      - "29092:29092"
+
+volumes:
+  postgres-data:
+  mongo-data:

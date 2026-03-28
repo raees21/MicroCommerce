@@ -1,0 +1,21 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Confluent.Kafka" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="MongoDB.Driver" />
+    <PackageReference Include="Npgsql" />
+    <PackageReference Include="StackExchange.Redis" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MicroCommerce.Contracts\MicroCommerce.Contracts.csproj" />
+    <ProjectReference Include="..\MicroCommerce.SharedKernel\MicroCommerce.SharedKernel.csproj" />
+  </ItemGroup>
+
+</Project>

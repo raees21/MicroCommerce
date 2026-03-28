@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+option csharp_namespace = "MicroCommerce.Products.Grpc";
+
+package products;
+
+service ProductCatalog {
+  rpc GetProducts (GetProductsRequest) returns (GetProductsResponse);
+}
+
+message GetProductsRequest {
+  repeated string product_ids = 1;
+}
+
+message GetProductsResponse {
+  repeated ProductSnapshot products = 1;
+}
+
+message ProductSnapshot {
+  string id = 1;
+  string sku = 2;
+  string name = 3;
+  string description = 4;
+  double price = 5;
+  int32 available_stock = 6;
+  bool is_active = 7;
+}
