@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using MicroCommerce.Contracts.Payments;
 using MicroCommerce.Infrastructure.Messaging;
 using MicroCommerce.Payments.Api.Data;
 using MicroCommerce.Payments.Api.Services;
@@ -61,4 +63,65 @@ app.MapGet("/api/payments/{orderId:guid}", async (Guid orderId, PaymentsDbContex
     return record is null ? Results.NotFound() : Results.Ok(record);
 }).RequireAuthorization();
 
+app.MapPost("/api/payments/{orderId:guid}/decision", async (
+    Guid orderId,
+    PaymentDecisionRequest request,
+    PaymentsDbContext dbContext,
+    IEventPublisher eventPublisher,
+    IOptions<KafkaOptions> kafkaOptions,
+    CancellationToken cancellationToken) =>
+{
+    var record = await dbContext.PaymentRecords
+        .SingleOrDefaultAsync(x => x.OrderId == orderId, cancellationToken);
+
+    if (record is null)
+    {
+        return Results.NotFound(new { message = "Payment record could not be found." });
+    }
+
+    if (!string.Equals(record.Status, "Pending", StringComparison.OrdinalIgnoreCase))
+    {
+        return Results.Conflict(new { message = $"Payment is already {record.Status}." });
+    }
+
+    record.Status = request.Approved ? "Authorized" : "Rejected";
+    record.Details = request.Approved
+        ? "Approved manually from the demo UI."
+        : "Rejected manually from the demo UI.";
+
+    await dbContext.SaveChangesAsync(cancellationToken);
+
+    if (request.Approved)
+    {
+        await eventPublisher.PublishAsync(
+            kafkaOptions.Value.Topics.PaymentSucceeded,
+            new PaymentSucceededIntegrationEvent(
+                record.OrderId,
+                record.UserId,
+                record.Amount,
+                $"AUTH-{record.OrderId:N}"[..12]),
+            cancellationToken);
+    }
+    else
+    {
+        await eventPublisher.PublishAsync(
+            kafkaOptions.Value.Topics.PaymentFailed,
+            new PaymentFailedIntegrationEvent(
+                record.OrderId,
+                record.UserId,
+                record.Amount,
+                "Rejected manually from the demo UI."),
+            cancellationToken);
+    }
+
+    return Results.Ok(new
+    {
+        record.OrderId,
+        record.Status,
+        record.Details
+    });
+}).RequireAuthorization();
+
 app.Run();
+
+public sealed record PaymentDecisionRequest(bool Approved);

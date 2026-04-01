@@ -20,6 +20,12 @@ public sealed class OrderProjectionStore
     public Task<OrderReadModel?> GetAsync(Guid orderId, CancellationToken cancellationToken) =>
         _collection.Find(x => x.Id == orderId).FirstOrDefaultAsync(cancellationToken);
 
+    public Task<List<OrderReadModel>> ListByUserAsync(Guid userId, CancellationToken cancellationToken) =>
+        _collection.Find(x => x.UserId == userId)
+            .SortByDescending(x => x.UpdatedAtUtc)
+            .ThenByDescending(x => x.CreatedAtUtc)
+            .ToListAsync(cancellationToken);
+
     public Task UpsertAsync(OrderReadModel model, CancellationToken cancellationToken) =>
         _collection.ReplaceOneAsync(
             x => x.Id == model.Id,

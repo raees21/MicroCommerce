@@ -15,16 +15,65 @@ export default function App() {
   const [products, setProducts] = useState([]);
   const [cart, setCart] = useState([]);
   const [orders, setOrders] = useState([]);
+  const [paymentDecisionOrderId, setPaymentDecisionOrderId] = useState("");
   const [message, setMessage] = useState("Use the seeded catalog to test a checkout flow.");
 
   useEffect(() => {
     loadProducts();
   }, []);
 
+  useEffect(() => {
+    if (!user?.id || !token) {
+      setCart([]);
+      setOrders([]);
+      return;
+    }
+
+    loadCart(user.id, token);
+    loadOrders(token);
+  }, [token, user?.id]);
+
   async function loadProducts() {
     const response = await fetch(`${apiBaseUrl}/api/products`);
     const data = await response.json();
     setProducts(data);
+  }
+
+  async function loadCart(userId, authToken) {
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/cart/${userId}`, {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      });
+
+      if (response.status === 404) {
+        setCart([]);
+        return;
+      }
+
+      const data = await readApiResponse(response);
+      setCart(data?.items ?? []);
+    } catch (error) {
+      setCart([]);
+      setMessage(getErrorMessage(error));
+    }
+  }
+
+  async function loadOrders(authToken) {
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/orders`, {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      });
+
+      const data = await readApiResponse(response);
+      setOrders(Array.isArray(data) ? data.map(normalizeOrder) : []);
+    } catch (error) {
+      setOrders([]);
+      setMessage(getErrorMessage(error));
+    }
   }
 
   async function register() {
@@ -123,7 +172,7 @@ export default function App() {
         body: JSON.stringify({
           userId: user.id,
           shippingAddress: "42 Example Street, Cape Town",
-          paymentToken: "demo-card",
+          paymentToken: "manual-review",
           lines: cart.map((item) => ({
             productId: item.productId,
             quantity: item.quantity,
@@ -132,11 +181,57 @@ export default function App() {
       });
 
       const data = await readApiResponse(response);
-      setOrders((current) => [data, ...current]);
+      setOrders((current) => [normalizeOrder(data), ...current]);
       setCart([]);
-      setMessage(`Order ${data.orderId} submitted with idempotency hash ${data.idempotencyHash}.`);
+      await readApiResponse(await fetch(`${apiBaseUrl}/api/cart/${user.id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }));
+      await loadOrders(token);
+      setMessage(`Order ${data.orderId} submitted and is waiting for a payment decision.`);
     } catch (error) {
       setMessage(getErrorMessage(error));
+    }
+  }
+
+  async function decidePayment(orderId, approved) {
+    if (!token) {
+      setMessage("Log in before deciding payments.");
+      return;
+    }
+
+    try {
+      setPaymentDecisionOrderId(orderId);
+      const response = await fetch(`${apiBaseUrl}/api/payments/${orderId}/decision`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ approved }),
+      });
+
+      const data = await readApiResponse(response);
+      setMessage(
+        approved
+          ? `Payment approved for order ${data.orderId}. Watching the saga continue...`
+          : `Payment rejected for order ${data.orderId}. The order saga should move to PaymentRejected.`,
+      );
+
+      await pollOrders(5, 800);
+    } catch (error) {
+      setMessage(getErrorMessage(error));
+    } finally {
+      setPaymentDecisionOrderId("");
+    }
+  }
+
+  async function pollOrders(attempts, intervalMs) {
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      await delay(intervalMs);
+      await loadOrders(token);
     }
   }
 
@@ -144,6 +239,7 @@ export default function App() {
     setToken("");
     setUser(null);
     setCart([]);
+    setOrders([]);
     localStorage.removeItem("token");
     localStorage.removeItem("user");
   }
@@ -229,6 +325,22 @@ export default function App() {
               <strong>{order.orderId}</strong>
               <div>{order.status}</div>
               <small>{order.idempotencyHash}</small>
+              {order.status === "PendingPayment" && (
+                <div className="button-row">
+                  <button
+                    disabled={paymentDecisionOrderId === order.orderId}
+                    onClick={() => decidePayment(order.orderId, true)}
+                  >
+                    Approve Payment
+                  </button>
+                  <button
+                    disabled={paymentDecisionOrderId === order.orderId}
+                    onClick={() => decidePayment(order.orderId, false)}
+                  >
+                    Reject Payment
+                  </button>
+                </div>
+              )}
             </article>
           ))}
         </div>
@@ -260,4 +372,17 @@ async function readApiResponse(response) {
 
 function getErrorMessage(error) {
   return error instanceof Error ? error.message : "Something went wrong.";
+}
+
+function normalizeOrder(order) {
+  return {
+    orderId: order.orderId ?? order.id,
+    idempotencyHash: order.idempotencyHash ?? "",
+    status: order.status ?? "Unknown",
+    totalAmount: order.totalAmount ?? 0,
+  };
+}
+
+function delay(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }

@@ -1,4 +1,5 @@
 using Grpc.Net.Client;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -148,6 +149,26 @@ app.MapGet("/api/orders/{orderId:guid}", async (Guid orderId, OrderProjectionSto
 {
     var order = await store.GetAsync(orderId, cancellationToken);
     return order is null ? Results.NotFound() : Results.Ok(order);
+}).RequireAuthorization();
+
+app.MapGet("/api/orders", async (ClaimsPrincipal user, OrderProjectionStore store, CancellationToken cancellationToken) =>
+{
+    var userIdValue = user.FindFirstValue(ClaimTypes.NameIdentifier);
+    if (!Guid.TryParse(userIdValue, out var userId))
+    {
+        return Results.Unauthorized();
+    }
+
+    var orders = await store.ListByUserAsync(userId, cancellationToken);
+    return Results.Ok(orders.Select(order => new
+    {
+        OrderId = order.Id,
+        order.IdempotencyHash,
+        order.Status,
+        order.TotalAmount,
+        order.CreatedAtUtc,
+        order.UpdatedAtUtc
+    }));
 }).RequireAuthorization();
 
 app.Run();

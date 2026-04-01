@@ -30,6 +30,7 @@ public sealed class OrderSubmittedConsumer(
                     return;
                 }
 
+                var requiresManualReview = string.Equals(message.PaymentToken, "manual-review", StringComparison.OrdinalIgnoreCase);
                 var shouldApprove = message.TotalAmount <= 10000m &&
                                     !string.Equals(message.PaymentToken, "fail", StringComparison.OrdinalIgnoreCase);
 
@@ -38,12 +39,21 @@ public sealed class OrderSubmittedConsumer(
                     OrderId = message.OrderId,
                     UserId = message.UserId,
                     Amount = message.TotalAmount,
-                    Status = shouldApprove ? "Authorized" : "Rejected",
-                    Details = shouldApprove ? "Simulated approval." : "Simulated rejection."
+                    Status = requiresManualReview ? "Pending" : shouldApprove ? "Authorized" : "Rejected",
+                    Details = requiresManualReview
+                        ? "Awaiting manual review."
+                        : shouldApprove
+                            ? "Simulated approval."
+                            : "Simulated rejection."
                 };
 
                 dbContext.PaymentRecords.Add(record);
                 await dbContext.SaveChangesAsync(cancellationToken);
+
+                if (requiresManualReview)
+                {
+                    return;
+                }
 
                 if (shouldApprove)
                 {
