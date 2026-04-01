@@ -1,6 +1,11 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0.103 AS build
 ARG PROJECT_PATH
 WORKDIR /src
+ENV PROTOBUF_PROTOC=/usr/bin/protoc
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends protobuf-compiler \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY . .
 RUN dotnet restore "$PROJECT_PATH"

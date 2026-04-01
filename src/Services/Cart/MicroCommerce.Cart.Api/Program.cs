@@ -55,7 +55,14 @@ app.MapPut("/api/cart/{userId:guid}", async (Guid userId, UpsertCartRequest requ
     var totalAmount = request.Items.Sum(x => x.UnitPrice * x.Quantity);
     var snapshot = new CartSnapshot(
         request.UserId,
-        request.Items,
+        request.Items
+            .Select(item => new CartSnapshotItem(
+                item.ProductId,
+                item.Sku,
+                item.Name,
+                item.Quantity,
+                item.UnitPrice))
+            .ToList(),
         totalAmount,
         DateTimeOffset.UtcNow);
 

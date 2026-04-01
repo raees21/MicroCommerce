@@ -1,9 +1,15 @@
+using MongoDB.Bson;
+using MongoDB.Bson.Serialization.Attributes;
+
 namespace MicroCommerce.Ordering.Api.Models;
 
 public sealed record OrderReadModel
 {
+    [BsonId]
+    [BsonGuidRepresentation(GuidRepresentation.Standard)]
     public Guid Id { get; init; }
 
+    [BsonGuidRepresentation(GuidRepresentation.Standard)]
     public Guid UserId { get; init; }
 
     public string IdempotencyHash { get; init; } = string.Empty;
@@ -23,6 +29,7 @@ public sealed record OrderReadModel
 
 public sealed record OrderReadModelLine
 {
+    [BsonGuidRepresentation(GuidRepresentation.Standard)]
     public Guid ProductId { get; init; }
 
     public string Sku { get; init; } = string.Empty;

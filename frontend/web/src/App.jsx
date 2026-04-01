@@ -28,27 +28,35 @@ export default function App() {
   }
 
   async function register() {
-    const response = await fetch(`${apiBaseUrl}/api/auth/register`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(authForm),
-    });
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/auth/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(authForm),
+      });
 
-    const data = await response.json();
-    persistAuth(data);
-    setMessage(`Registered ${data.fullName}.`);
+      const data = await readApiResponse(response);
+      persistAuth(data);
+      setMessage(`Registered ${data.fullName}.`);
+    } catch (error) {
+      setMessage(getErrorMessage(error));
+    }
   }
 
   async function login() {
-    const response = await fetch(`${apiBaseUrl}/api/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: authForm.email, password: authForm.password }),
-    });
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: authForm.email, password: authForm.password }),
+      });
 
-    const data = await response.json();
-    persistAuth(data);
-    setMessage(`Logged in as ${data.fullName}.`);
+      const data = await readApiResponse(response);
+      persistAuth(data);
+      setMessage(`Logged in as ${data.fullName}.`);
+    } catch (error) {
+      setMessage(getErrorMessage(error));
+    }
   }
 
   function persistAuth(data) {
@@ -82,17 +90,21 @@ export default function App() {
 
     setCart(nextCart);
 
-    await fetch(`${apiBaseUrl}/api/cart/${user.id}`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        userId: user.id,
-        items: nextCart,
-      }),
-    });
+    try {
+      await readApiResponse(await fetch(`${apiBaseUrl}/api/cart/${user.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          items: nextCart,
+        }),
+      }));
+    } catch (error) {
+      setMessage(getErrorMessage(error));
+    }
   }
 
   async function checkout() {
@@ -101,27 +113,31 @@ export default function App() {
       return;
     }
 
-    const response = await fetch(`${apiBaseUrl}/api/orders`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        userId: user.id,
-        shippingAddress: "42 Example Street, Cape Town",
-        paymentToken: "demo-card",
-        lines: cart.map((item) => ({
-          productId: item.productId,
-          quantity: item.quantity,
-        })),
-      }),
-    });
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/orders`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          shippingAddress: "42 Example Street, Cape Town",
+          paymentToken: "demo-card",
+          lines: cart.map((item) => ({
+            productId: item.productId,
+            quantity: item.quantity,
+          })),
+        }),
+      });
 
-    const data = await response.json();
-    setOrders((current) => [data, ...current]);
-    setCart([]);
-    setMessage(`Order ${data.orderId} submitted with idempotency hash ${data.idempotencyHash}.`);
+      const data = await readApiResponse(response);
+      setOrders((current) => [data, ...current]);
+      setCart([]);
+      setMessage(`Order ${data.orderId} submitted with idempotency hash ${data.idempotencyHash}.`);
+    } catch (error) {
+      setMessage(getErrorMessage(error));
+    }
   }
 
   function logout() {
@@ -224,4 +240,24 @@ export default function App() {
 function readLocalJson(key) {
   const value = localStorage.getItem(key);
   return value ? JSON.parse(value) : null;
+}
+
+async function readApiResponse(response) {
+  const text = await response.text();
+  const data = text ? JSON.parse(text) : null;
+
+  if (response.ok) {
+    return data;
+  }
+
+  const message =
+    data?.message ||
+    data?.errors?.join(", ") ||
+    `Request failed with status ${response.status}.`;
+
+  throw new Error(message);
+}
+
+function getErrorMessage(error) {
+  return error instanceof Error ? error.message : "Something went wrong.";
 }

@@ -32,6 +32,8 @@ builder.Services.AddIdentityCore<ApplicationUser>(options =>
     .AddEntityFrameworkStores<IdentityDb>()
     .AddSignInManager();
 
+builder.Services.AddAuthentication();
+
 builder.Services.AddSingleton(jwtOptions);
 builder.Services.AddScoped<JwtTokenService>();
 builder.Services.AddKafkaMessaging(builder.Configuration);
