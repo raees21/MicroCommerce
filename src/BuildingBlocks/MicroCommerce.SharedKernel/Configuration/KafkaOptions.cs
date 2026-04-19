@@ -26,4 +26,14 @@ public sealed class KafkaTopicOptions
     public string ShipmentCreated { get; init; } = "shipping.shipment-created";
 
     public string ShipmentFailed { get; init; } = "shipping.shipment-failed";
+
+    public IReadOnlyList<string> GetAll() =>
+    [
+        UserRegistered,
+        OrderSubmitted,
+        PaymentSucceeded,
+        PaymentFailed,
+        ShipmentCreated,
+        ShipmentFailed
+    ];
 }

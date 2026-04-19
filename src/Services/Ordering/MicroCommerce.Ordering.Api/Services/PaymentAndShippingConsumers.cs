@@ -18,7 +18,7 @@ public sealed class PaymentSucceededConsumer(
             {
                 await using var scope = scopeFactory.CreateAsyncScope();
                 var updater = scope.ServiceProvider.GetRequiredService<OrderStateUpdater>();
-                await updater.UpdateStatusAsync(message.OrderId, "PaymentAuthorized", message.EventType, message, cancellationToken);
+                await updater.UpdateStatusAsync(message.OrderId, "PaymentAuthorized", message, cancellationToken);
             },
             stoppingToken);
 }
@@ -35,7 +35,7 @@ public sealed class PaymentFailedConsumer(
             {
                 await using var scope = scopeFactory.CreateAsyncScope();
                 var updater = scope.ServiceProvider.GetRequiredService<OrderStateUpdater>();
-                await updater.UpdateStatusAsync(message.OrderId, "PaymentRejected", message.EventType, message, cancellationToken);
+                await updater.UpdateStatusAsync(message.OrderId, "PaymentRejected", message, cancellationToken);
             },
             stoppingToken);
 }
@@ -52,7 +52,7 @@ public sealed class ShipmentCreatedConsumer(
             {
                 await using var scope = scopeFactory.CreateAsyncScope();
                 var updater = scope.ServiceProvider.GetRequiredService<OrderStateUpdater>();
-                await updater.UpdateStatusAsync(message.OrderId, "Completed", message.EventType, message, cancellationToken);
+                await updater.UpdateStatusAsync(message.OrderId, "Completed", message, cancellationToken);
             },
             stoppingToken);
 }
@@ -69,7 +69,7 @@ public sealed class ShipmentFailedConsumer(
             {
                 await using var scope = scopeFactory.CreateAsyncScope();
                 var updater = scope.ServiceProvider.GetRequiredService<OrderStateUpdater>();
-                await updater.UpdateStatusAsync(message.OrderId, "ShippingFailed", message.EventType, message, cancellationToken);
+                await updater.UpdateStatusAsync(message.OrderId, "ShippingFailed", message, cancellationToken);
             },
             stoppingToken);
 }

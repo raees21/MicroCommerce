@@ -40,6 +40,7 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<IEventPublisher, KafkaEventPublisher>();
         services.AddSingleton<KafkaConsumer>();
+        services.AddHostedService<KafkaTopicProvisioningService>();
 
         return services;
     }

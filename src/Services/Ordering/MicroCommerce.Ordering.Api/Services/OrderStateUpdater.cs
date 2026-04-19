@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using MicroCommerce.Contracts.Ordering;
 using MicroCommerce.Ordering.Api.Data;
 using MicroCommerce.Ordering.Api.Models;
+using MicroCommerce.SharedKernel.Abstractions;
 
 namespace MicroCommerce.Ordering.Api.Services;
 
@@ -56,8 +57,17 @@ public sealed class OrderStateUpdater(
         }, cancellationToken);
     }
 
-    public async Task UpdateStatusAsync(Guid orderId, string newStatus, string eventType, object payload, CancellationToken cancellationToken)
+    public async Task UpdateStatusAsync(
+        Guid orderId,
+        string newStatus,
+        IntegrationEvent integrationEvent,
+        CancellationToken cancellationToken)
     {
+        if (await HasProcessedEventAsync(orderId, integrationEvent, cancellationToken))
+        {
+            return;
+        }
+
         var saga = await dbContext.OrderSagas.SingleOrDefaultAsync(x => x.OrderId == orderId, cancellationToken);
         if (saga is null)
         {
@@ -75,8 +85,8 @@ public sealed class OrderStateUpdater(
         {
             OrderId = orderId,
             Version = nextVersion,
-            EventType = eventType,
-            Payload = JsonSerializer.Serialize(payload, JsonOptions)
+            EventType = integrationEvent.EventType,
+            Payload = JsonSerializer.Serialize(integrationEvent, integrationEvent.GetType(), JsonOptions)
         });
 
         await dbContext.SaveChangesAsync(cancellationToken);
@@ -92,5 +102,39 @@ public sealed class OrderStateUpdater(
             Status = newStatus,
             UpdatedAtUtc = DateTimeOffset.UtcNow
         }, cancellationToken);
+    }
+
+    private async Task<bool> HasProcessedEventAsync(
+        Guid orderId,
+        IntegrationEvent integrationEvent,
+        CancellationToken cancellationToken)
+    {
+        var payloads = await dbContext.OrderEvents
+            .Where(x => x.OrderId == orderId && x.EventType == integrationEvent.EventType)
+            .Select(x => x.Payload)
+            .ToListAsync(cancellationToken);
+
+        return payloads.Any(payload => PayloadContainsEventId(payload, integrationEvent.EventId));
+    }
+
+    private static bool PayloadContainsEventId(string payload, Guid eventId)
+    {
+        if (string.IsNullOrWhiteSpace(payload))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(payload);
+            return document.RootElement.TryGetProperty("eventId", out var eventIdElement) &&
+                   eventIdElement.ValueKind == JsonValueKind.String &&
+                   Guid.TryParse(eventIdElement.GetString(), out var storedEventId) &&
+                   storedEventId == eventId;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 }
