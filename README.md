@@ -305,6 +305,7 @@ This starts:
 - all backend services
 - the API gateway
 - the React frontend
+- AKHQ
 - Postgres
 - MongoDB
 - Redis
@@ -324,6 +325,7 @@ This starts:
 - Ordering gRPC: `http://localhost:6105`
 - Payments: `http://localhost:6006`
 - Shipping: `http://localhost:6007`
+- AKHQ: `http://localhost:8085`
 - Postgres: `localhost:5432`
 - MongoDB: `localhost:27017`
 - Redis: `localhost:6379`
@@ -347,6 +349,7 @@ docker compose -f docker-compose.infra.yml up -d
 
 This starts only:
 
+- AKHQ
 - Postgres
 - MongoDB
 - Redis
@@ -387,6 +390,7 @@ Example:
 ### Notes for hybrid local development
 
 - The infra-only compose file is the best starting point for Rider work
+- AKHQ is available at `http://localhost:8085`
 - Kafka is exposed on `localhost:29092`
 - Postgres is exposed on `localhost:5432`
 - MongoDB is exposed on `localhost:27017`
