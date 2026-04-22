@@ -11,6 +11,7 @@ public sealed class KafkaTopicProvisioningService(
     ILogger<KafkaTopicProvisioningService> logger) : IHostedService
 {
     private static readonly TimeSpan BrokerReadyTimeout = TimeSpan.FromSeconds(45);
+    private static readonly TimeSpan TopicVisibilityTimeout = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan AdminOperationTimeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(2);
 
@@ -44,7 +45,7 @@ public sealed class KafkaTopicProvisioningService(
 
         await CreateMissingTopicsAsync(adminClient, topicsToCreate, cancellationToken);
 
-        var remainingTopics = GetMissingTopics(adminClient, topicNames);
+        var remainingTopics = await WaitForTopicsAsync(adminClient, topicNames, cancellationToken);
         if (remainingTopics.Count == 0)
         {
             logger.LogInformation("Kafka topics are ready: {Topics}", string.Join(", ", topicNames));
@@ -94,6 +95,40 @@ public sealed class KafkaTopicProvisioningService(
         return topicNames
             .Where(topic => !existingTopics.Contains(topic))
             .ToList();
+    }
+
+    private async Task<IReadOnlyList<string>> WaitForTopicsAsync(
+        IAdminClient adminClient,
+        IReadOnlyCollection<string> topicNames,
+        CancellationToken cancellationToken)
+    {
+        var deadline = DateTimeOffset.UtcNow + TopicVisibilityTimeout;
+        IReadOnlyList<string> remainingTopics = topicNames.ToList();
+
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            try
+            {
+                remainingTopics = GetMissingTopics(adminClient, topicNames);
+                if (remainingTopics.Count == 0)
+                {
+                    return remainingTopics;
+                }
+            }
+            catch (KafkaException ex)
+            {
+                logger.LogInformation(
+                    ex,
+                    "Kafka topic metadata is not fully available yet at {BootstrapServers}. Retrying.",
+                    options.BootstrapServers);
+            }
+
+            await Task.Delay(RetryDelay, cancellationToken);
+        }
+
+        return remainingTopics;
     }
 
     private async Task CreateMissingTopicsAsync(
