@@ -25,8 +25,10 @@ services:
         PROJECT_PATH: src/Services/Identity/MicroCommerce.Identity.Api/MicroCommerce.Identity.Api.csproj
     container_name: identity-api
     depends_on:
-      - postgres
-      - kafka
+      postgres:
+        condition: service_started
+      kafka:
+        condition: service_healthy
     environment:
       Storage__PostgresConnectionString: Host=postgres;Port=5432;Database=identitydb;Username=postgres;Password=postgres
       Kafka__BootstrapServers: kafka:9092
@@ -43,8 +45,10 @@ services:
         PROJECT_PATH: src/Services/Users/MicroCommerce.Users.Api/MicroCommerce.Users.Api.csproj
     container_name: users-api
     depends_on:
-      - postgres
-      - kafka
+      postgres:
+        condition: service_started
+      kafka:
+        condition: service_healthy
     environment:
       Storage__PostgresConnectionString: Host=postgres;Port=5432;Database=usersdb;Username=postgres;Password=postgres
       Kafka__BootstrapServers: kafka:9092
@@ -93,10 +97,14 @@ services:
         PROJECT_PATH: src/Services/Ordering/MicroCommerce.Ordering.Api/MicroCommerce.Ordering.Api.csproj
     container_name: ordering-api
     depends_on:
-      - postgres
-      - mongodb
-      - kafka
-      - products-api
+      postgres:
+        condition: service_started
+      mongodb:
+        condition: service_started
+      kafka:
+        condition: service_healthy
+      products-api:
+        condition: service_started
     environment:
       Storage__PostgresConnectionString: Host=postgres;Port=5432;Database=orderingdb;Username=postgres;Password=postgres
       Storage__MongoConnectionString: mongodb://mongodb:27017
@@ -117,8 +125,10 @@ services:
         PROJECT_PATH: src/Services/Payments/MicroCommerce.Payments.Api/MicroCommerce.Payments.Api.csproj
     container_name: payments-api
     depends_on:
-      - postgres
-      - kafka
+      postgres:
+        condition: service_started
+      kafka:
+        condition: service_healthy
     environment:
       Storage__PostgresConnectionString: Host=postgres;Port=5432;Database=paymentsdb;Username=postgres;Password=postgres
       Kafka__BootstrapServers: kafka:9092
@@ -135,8 +145,10 @@ services:
         PROJECT_PATH: src/Services/Shipping/MicroCommerce.Shipping.Api/MicroCommerce.Shipping.Api.csproj
     container_name: shipping-api
     depends_on:
-      - postgres
-      - kafka
+      postgres:
+        condition: service_started
+      kafka:
+        condition: service_healthy
     environment:
       Storage__PostgresConnectionString: Host=postgres;Port=5432;Database=shippingdb;Username=postgres;Password=postgres
       Kafka__BootstrapServers: kafka:9092
@@ -188,6 +200,12 @@ services:
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
     ports:
       - "2181:2181"
 
@@ -195,7 +213,8 @@ services:
     image: confluentinc/cp-kafka:7.7.1
     container_name: kafka
     depends_on:
-      - zookeeper
+      zookeeper:
+        condition: service_healthy
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
@@ -206,6 +225,12 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+    healthcheck:
+      test: ["CMD-SHELL", "cub kafka-ready -b localhost:9092 1 30"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 20s
     ports:
       - "29092:29092"
 
@@ -213,7 +238,8 @@ services:
     image: tchiotludo/akhq:0.26.0
     container_name: akhq
     depends_on:
-      - kafka
+      kafka:
+        condition: service_healthy
     environment:
       AKHQ_CONFIGURATION: |
         akhq:

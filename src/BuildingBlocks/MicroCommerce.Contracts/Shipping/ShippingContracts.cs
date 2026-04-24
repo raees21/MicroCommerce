@@ -2,6 +2,10 @@ using MicroCommerce.SharedKernel.Abstractions;
 
 namespace MicroCommerce.Contracts.Shipping;
 
+public sealed record CreateShipmentCommand(
+    Guid OrderId,
+    Guid UserId) : IntegrationEvent("shipping.create-shipment");
+
 public sealed record ShipmentCreatedIntegrationEvent(
     Guid OrderId,
     Guid UserId,

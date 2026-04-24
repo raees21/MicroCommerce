@@ -22,7 +22,7 @@ builder.Services.AddDbContext<PaymentsDbContext>(options =>
     options.UseNpgsql(storageOptions.PostgresConnectionString));
 
 builder.Services.AddKafkaMessaging(builder.Configuration);
-builder.Services.AddHostedService<OrderSubmittedConsumer>();
+builder.Services.AddHostedService<ProcessPaymentConsumer>();
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {

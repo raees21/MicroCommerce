@@ -38,10 +38,11 @@ builder.Services.AddSingleton(_ =>
     return new ProductCatalog.ProductCatalogClient(channel);
 });
 
-builder.Services.AddHostedService<PaymentSucceededConsumer>();
-builder.Services.AddHostedService<PaymentFailedConsumer>();
-builder.Services.AddHostedService<ShipmentCreatedConsumer>();
-builder.Services.AddHostedService<ShipmentFailedConsumer>();
+builder.Services.AddHostedService<OrderSubmittedOrchestratorConsumer>();
+builder.Services.AddHostedService<PaymentSucceededOrchestratorConsumer>();
+builder.Services.AddHostedService<PaymentFailedOrchestratorConsumer>();
+builder.Services.AddHostedService<ShipmentCreatedOrchestratorConsumer>();
+builder.Services.AddHostedService<ShipmentFailedOrchestratorConsumer>();
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -75,7 +76,7 @@ app.UseAuthorization();
 app.MapGet("/", () => Results.Ok(new
 {
     service = "ordering",
-    workflow = "REST in, gRPC to products, Kafka saga kickoff"
+    workflow = "REST in, gRPC validation, orchestrated Kafka saga"
 }));
 
 app.MapPost("/api/orders", async (
@@ -93,7 +94,8 @@ app.MapPost("/api/orders", async (
 
     var productResponse = await productsClient.GetProductsAsync(new GetProductsRequest
     {
-        ProductIds = { request.Lines.Select(x => x.ProductId.ToString()) }
+        ProductIds = { request.Lines
+            .Select(x => x.ProductId.ToString()) }
     }, cancellationToken: cancellationToken);
 
     var products = productResponse.Products.ToDictionary(x => Guid.Parse(x.Id));

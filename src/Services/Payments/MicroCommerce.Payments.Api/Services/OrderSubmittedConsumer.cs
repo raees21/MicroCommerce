@@ -1,6 +1,5 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
-using MicroCommerce.Contracts.Ordering;
 using MicroCommerce.Contracts.Payments;
 using MicroCommerce.Infrastructure.Messaging;
 using MicroCommerce.Payments.Api.Data;
@@ -8,14 +7,14 @@ using MicroCommerce.SharedKernel.Configuration;
 
 namespace MicroCommerce.Payments.Api.Services;
 
-public sealed class OrderSubmittedConsumer(
+public sealed class ProcessPaymentConsumer(
     KafkaConsumer consumer,
     IServiceScopeFactory scopeFactory,
     IOptions<KafkaOptions> kafkaOptions) : BackgroundService
 {
     protected override Task ExecuteAsync(CancellationToken stoppingToken) =>
-        consumer.ConsumeAsync<OrderSubmittedIntegrationEvent>(
-            kafkaOptions.Value.Topics.OrderSubmitted,
+        consumer.ConsumeAsync<ProcessPaymentCommand>(
+            kafkaOptions.Value.Topics.ProcessPayment,
             async (message, cancellationToken) =>
             {
                 await using var scope = scopeFactory.CreateAsyncScope();
@@ -31,14 +30,14 @@ public sealed class OrderSubmittedConsumer(
                 }
 
                 var requiresManualReview = string.Equals(message.PaymentToken, "manual-review", StringComparison.OrdinalIgnoreCase);
-                var shouldApprove = message.TotalAmount <= 10000m &&
+                var shouldApprove = message.Amount <= 10000m &&
                                     !string.Equals(message.PaymentToken, "fail", StringComparison.OrdinalIgnoreCase);
 
                 var record = new PaymentRecordEntity
                 {
                     OrderId = message.OrderId,
                     UserId = message.UserId,
-                    Amount = message.TotalAmount,
+                    Amount = message.Amount,
                     Status = requiresManualReview ? "Pending" : shouldApprove ? "Authorized" : "Rejected",
                     Details = requiresManualReview
                         ? "Awaiting manual review."
@@ -62,7 +61,7 @@ public sealed class OrderSubmittedConsumer(
                         new PaymentSucceededIntegrationEvent(
                             message.OrderId,
                             message.UserId,
-                            message.TotalAmount,
+                            message.Amount,
                             $"AUTH-{message.OrderId:N}"[..12]),
                         cancellationToken);
                 }
@@ -73,7 +72,7 @@ public sealed class OrderSubmittedConsumer(
                         new PaymentFailedIntegrationEvent(
                             message.OrderId,
                             message.UserId,
-                            message.TotalAmount,
+                            message.Amount,
                             "Simulated payment failure."),
                         cancellationToken);
                 }

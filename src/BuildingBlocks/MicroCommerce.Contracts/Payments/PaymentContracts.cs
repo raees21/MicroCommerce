@@ -2,6 +2,12 @@ using MicroCommerce.SharedKernel.Abstractions;
 
 namespace MicroCommerce.Contracts.Payments;
 
+public sealed record ProcessPaymentCommand(
+    Guid OrderId,
+    Guid UserId,
+    string PaymentToken,
+    decimal Amount) : IntegrationEvent("payments.process-payment");
+
 public sealed record PaymentSucceededIntegrationEvent(
     Guid OrderId,
     Guid UserId,

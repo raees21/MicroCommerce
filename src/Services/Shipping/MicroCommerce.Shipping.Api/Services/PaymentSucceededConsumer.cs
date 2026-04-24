@@ -1,6 +1,5 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
-using MicroCommerce.Contracts.Payments;
 using MicroCommerce.Contracts.Shipping;
 using MicroCommerce.Infrastructure.Messaging;
 using MicroCommerce.SharedKernel.Configuration;
@@ -8,14 +7,14 @@ using MicroCommerce.Shipping.Api.Data;
 
 namespace MicroCommerce.Shipping.Api.Services;
 
-public sealed class PaymentSucceededConsumer(
+public sealed class CreateShipmentConsumer(
     KafkaConsumer consumer,
     IServiceScopeFactory scopeFactory,
     IOptions<KafkaOptions> kafkaOptions) : BackgroundService
 {
     protected override Task ExecuteAsync(CancellationToken stoppingToken) =>
-        consumer.ConsumeAsync<PaymentSucceededIntegrationEvent>(
-            kafkaOptions.Value.Topics.PaymentSucceeded,
+        consumer.ConsumeAsync<CreateShipmentCommand>(
+            kafkaOptions.Value.Topics.CreateShipment,
             async (message, cancellationToken) =>
             {
                 await using var scope = scopeFactory.CreateAsyncScope();

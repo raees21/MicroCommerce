@@ -17,8 +17,8 @@ public sealed class OrderProjectionStore
         _collection = database.GetCollection<OrderReadModel>("orders");
     }
 
-    public Task<OrderReadModel?> GetAsync(Guid orderId, CancellationToken cancellationToken) =>
-        _collection.Find(x => x.Id == orderId).FirstOrDefaultAsync(cancellationToken);
+    public async Task<OrderReadModel?> GetAsync(Guid orderId, CancellationToken cancellationToken) =>
+        await _collection.Find(x => x.Id == orderId).FirstOrDefaultAsync(cancellationToken);
 
     public Task<List<OrderReadModel>> ListByUserAsync(Guid userId, CancellationToken cancellationToken) =>
         _collection.Find(x => x.UserId == userId)

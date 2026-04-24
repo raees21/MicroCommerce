@@ -57,7 +57,7 @@ public sealed class OrderStateUpdater(
         }, cancellationToken);
     }
 
-    public async Task UpdateStatusAsync(
+    public async Task<bool> UpdateStatusAsync(
         Guid orderId,
         string newStatus,
         IntegrationEvent integrationEvent,
@@ -65,13 +65,13 @@ public sealed class OrderStateUpdater(
     {
         if (await HasProcessedEventAsync(orderId, integrationEvent, cancellationToken))
         {
-            return;
+            return false;
         }
 
         var saga = await dbContext.OrderSagas.SingleOrDefaultAsync(x => x.OrderId == orderId, cancellationToken);
         if (saga is null)
         {
-            return;
+            return false;
         }
 
         var nextVersion = await dbContext.OrderEvents
@@ -94,7 +94,7 @@ public sealed class OrderStateUpdater(
         var projection = await projectionStore.GetAsync(orderId, cancellationToken);
         if (projection is null)
         {
-            return;
+            return false;
         }
 
         await projectionStore.UpsertAsync(projection with
@@ -102,6 +102,8 @@ public sealed class OrderStateUpdater(
             Status = newStatus,
             UpdatedAtUtc = DateTimeOffset.UtcNow
         }, cancellationToken);
+
+        return true;
     }
 
     private async Task<bool> HasProcessedEventAsync(

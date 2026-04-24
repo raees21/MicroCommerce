@@ -1,3 +1,5 @@
+using Microsoft.Extensions.Options;
+using MicroCommerce.Contracts.Ordering;
 using MicroCommerce.Contracts.Payments;
 using MicroCommerce.Contracts.Shipping;
 using MicroCommerce.Infrastructure.Messaging;
@@ -6,31 +8,64 @@ using MicroCommerce.SharedKernel.Configuration;
 
 namespace MicroCommerce.Ordering.Api.Services;
 
-public sealed class PaymentSucceededConsumer(
+public sealed class OrderSubmittedOrchestratorConsumer(
     KafkaConsumer consumer,
-    KafkaOptions options,
-    IServiceScopeFactory scopeFactory) : BackgroundService
+    IEventPublisher eventPublisher,
+    IOptions<KafkaOptions> options) : BackgroundService
 {
     protected override Task ExecuteAsync(CancellationToken stoppingToken) =>
-        consumer.ConsumeAsync<PaymentSucceededIntegrationEvent>(
-            options.Topics.PaymentSucceeded,
+        consumer.ConsumeAsync<OrderSubmittedIntegrationEvent>(
+            options.Value.Topics.OrderSubmitted,
             async (message, cancellationToken) =>
             {
-                await using var scope = scopeFactory.CreateAsyncScope();
-                var updater = scope.ServiceProvider.GetRequiredService<OrderStateUpdater>();
-                await updater.UpdateStatusAsync(message.OrderId, "PaymentAuthorized", message, cancellationToken);
+                await eventPublisher.PublishAsync(
+                    options.Value.Topics.ProcessPayment,
+                    new ProcessPaymentCommand(
+                        message.OrderId,
+                        message.UserId,
+                        message.PaymentToken,
+                        message.TotalAmount),
+                    cancellationToken);
             },
             stoppingToken);
 }
 
-public sealed class PaymentFailedConsumer(
+public sealed class PaymentSucceededOrchestratorConsumer(
     KafkaConsumer consumer,
-    KafkaOptions options,
+    IEventPublisher eventPublisher,
+    IOptions<KafkaOptions> options,
+    IServiceScopeFactory scopeFactory) : BackgroundService
+{
+    protected override Task ExecuteAsync(CancellationToken stoppingToken) =>
+        consumer.ConsumeAsync<PaymentSucceededIntegrationEvent>(
+            options.Value.Topics.PaymentSucceeded,
+            async (message, cancellationToken) =>
+            {
+                await using var scope = scopeFactory.CreateAsyncScope();
+                var updater = scope.ServiceProvider.GetRequiredService<OrderStateUpdater>();
+                var applied = await updater.UpdateStatusAsync(message.OrderId, "PaymentAuthorized", message, cancellationToken);
+
+                if (!applied)
+                {
+                    return;
+                }
+
+                await eventPublisher.PublishAsync(
+                    options.Value.Topics.CreateShipment,
+                    new CreateShipmentCommand(message.OrderId, message.UserId),
+                    cancellationToken);
+            },
+            stoppingToken);
+}
+
+public sealed class PaymentFailedOrchestratorConsumer(
+    KafkaConsumer consumer,
+    IOptions<KafkaOptions> options,
     IServiceScopeFactory scopeFactory) : BackgroundService
 {
     protected override Task ExecuteAsync(CancellationToken stoppingToken) =>
         consumer.ConsumeAsync<PaymentFailedIntegrationEvent>(
-            options.Topics.PaymentFailed,
+            options.Value.Topics.PaymentFailed,
             async (message, cancellationToken) =>
             {
                 await using var scope = scopeFactory.CreateAsyncScope();
@@ -40,14 +75,14 @@ public sealed class PaymentFailedConsumer(
             stoppingToken);
 }
 
-public sealed class ShipmentCreatedConsumer(
+public sealed class ShipmentCreatedOrchestratorConsumer(
     KafkaConsumer consumer,
-    KafkaOptions options,
+    IOptions<KafkaOptions> options,
     IServiceScopeFactory scopeFactory) : BackgroundService
 {
     protected override Task ExecuteAsync(CancellationToken stoppingToken) =>
         consumer.ConsumeAsync<ShipmentCreatedIntegrationEvent>(
-            options.Topics.ShipmentCreated,
+            options.Value.Topics.ShipmentCreated,
             async (message, cancellationToken) =>
             {
                 await using var scope = scopeFactory.CreateAsyncScope();
@@ -57,14 +92,14 @@ public sealed class ShipmentCreatedConsumer(
             stoppingToken);
 }
 
-public sealed class ShipmentFailedConsumer(
+public sealed class ShipmentFailedOrchestratorConsumer(
     KafkaConsumer consumer,
-    KafkaOptions options,
+    IOptions<KafkaOptions> options,
     IServiceScopeFactory scopeFactory) : BackgroundService
 {
     protected override Task ExecuteAsync(CancellationToken stoppingToken) =>
         consumer.ConsumeAsync<ShipmentFailedIntegrationEvent>(
-            options.Topics.ShipmentFailed,
+            options.Value.Topics.ShipmentFailed,
             async (message, cancellationToken) =>
             {
                 await using var scope = scopeFactory.CreateAsyncScope();

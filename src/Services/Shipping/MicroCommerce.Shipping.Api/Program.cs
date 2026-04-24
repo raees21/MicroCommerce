@@ -20,7 +20,7 @@ builder.Services.AddDbContext<ShippingDbContext>(options =>
     options.UseNpgsql(storageOptions.PostgresConnectionString));
 
 builder.Services.AddKafkaMessaging(builder.Configuration);
-builder.Services.AddHostedService<PaymentSucceededConsumer>();
+builder.Services.AddHostedService<CreateShipmentConsumer>();
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {

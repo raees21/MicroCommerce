@@ -58,9 +58,10 @@ flowchart LR
     ORD -->|gRPC| PRD
 
     ID -->|Kafka: user-registered| USR
-    ORD -->|Kafka: order-submitted| PAY
+    ORD -->|Kafka: order-submitted| ORD
+    ORD -->|Kafka command: process-payment| PAY
     PAY -->|Kafka: payment-succeeded / payment-failed| ORD
-    PAY -->|Kafka: payment-succeeded| SHP
+    ORD -->|Kafka command: create-shipment| SHP
     SHP -->|Kafka: shipment-created / shipment-failed| ORD
 
     ID --> PSQL["Postgres"]
@@ -117,12 +118,14 @@ Kafka is used for integration events so services stay decoupled. The sample uses
 
 ### Saga pattern
 
-The order lifecycle is modeled as a simple saga:
+The order lifecycle is modeled as an orchestrated saga owned by `Ordering`:
 
 1. `Ordering` publishes `ordering.order-submitted`
-2. `Payments` consumes it and either approves or rejects payment
-3. `Shipping` creates a shipment after a successful payment
-4. `Ordering` consumes downstream events and updates the order status
+2. `Ordering` consumes that event and sends the `payments.process-payment` command
+3. `Payments` consumes the command and publishes `payment-succeeded` or `payment-failed`
+4. `Ordering` consumes the payment result and, on success, sends the `shipping.create-shipment` command
+5. `Shipping` consumes the command and publishes `shipment-created` or `shipment-failed`
+6. `Ordering` consumes downstream events and updates the order status
 
 ### Idempotency
 
@@ -213,6 +216,7 @@ Responsibilities:
 - call `Products` via gRPC to validate and snapshot product data
 - store order events
 - maintain saga state
+- orchestrate payment and shipping commands
 - project read models to MongoDB
 - consume payment/shipping events
 
@@ -228,7 +232,7 @@ Location: `src/Services/Payments/MicroCommerce.Payments.Api`
 Responsibilities:
 
 - simulate payment processing
-- consume `ordering.order-submitted`
+- consume `payments.process-payment`
 - publish success/failure events
 
 Persistence:
@@ -242,7 +246,7 @@ Location: `src/Services/Shipping/MicroCommerce.Shipping.Api`
 Responsibilities:
 
 - simulate shipment creation
-- consume payment success events
+- consume `shipping.create-shipment`
 - publish shipment success/failure events
 
 Persistence:
@@ -255,8 +259,10 @@ The main Kafka topics used by the sample are:
 
 - `identity.user-registered`
 - `ordering.order-submitted`
+- `payments.process-payment`
 - `payments.payment-succeeded`
 - `payments.payment-failed`
+- `shipping.create-shipment`
 - `shipping.shipment-created`
 - `shipping.shipment-failed`
 
